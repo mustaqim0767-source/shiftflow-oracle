@@ -162,23 +162,3 @@ BEGIN
     COMMIT;
 END;
 /
-
--- ============================================================================
--- Query Uji Performa (EXPLAIN PLAN Before vs After Index)
--- ============================================================================
-/*
-SELECT 
-    s.schedule_id,
-    s.tanggal_shift,
-    s.status,
-    u.nama_lengkap,
-    t.nama_shift,
-    t.durasi_jam
-FROM SHIFT_SCHEDULES s
-JOIN SHIFT_TEMPLATES t ON s.template_id = t.template_id
-LEFT JOIN USERS u ON s.user_id = u.user_id
-WHERE s.outlet_id = 1
-  AND s.status = 'ASSIGNED'
-  AND s.tanggal_shift BETWEEN TRUNC(SYSDATE) - 30 AND TRUNC(SYSDATE) + 7
-ORDER BY s.tanggal_shift;
-*/
