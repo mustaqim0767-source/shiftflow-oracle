@@ -1,44 +1,81 @@
 import { useEffect, useState } from 'react';
-import { fetchWeeklySchedules, fetchSubstituteRecommendations } from '../services/api';
+import {
+  fetchWeeklySchedules,
+  fetchSubstituteRecommendations,
+  claimOpenShift,
+  fetchOutlets,
+} from '../services/api';
 
 export default function WeeklySchedule({ currentUser }) {
   const [schedules, setSchedules] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [outletFilter, setOutletFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
+  const [claimingId, setClaimingId] = useState(null);
   const [selectedShift, setSelectedShift] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRec, setLoadingRec] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
+  const [toast, setToast] = useState({ type: '', message: '' });
+
+  useEffect(() => {
+    loadOutlets();
+  }, []);
 
   useEffect(() => {
     loadSchedules();
   }, [outletFilter]);
 
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast({ type: '', message: '' }), 5000);
+  };
+
+  const loadOutlets = async () => {
+    try {
+      const data = await fetchOutlets();
+      setOutlets(data);
+    } catch (err) {
+      showToast('error', err.message || 'Gagal memuat daftar outlet dari database.');
+    }
+  };
+
   const loadSchedules = async () => {
     setLoading(true);
-    const data = await fetchWeeklySchedules(outletFilter);
-    setSchedules(data);
-    setLoading(false);
+    try {
+      const data = await fetchWeeklySchedules(outletFilter);
+      setSchedules(data);
+    } catch (err) {
+      showToast('error', err.message || 'Gagal memuat jadwal mingguan.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenRecommendation = async (shift) => {
     setSelectedShift(shift);
     setLoadingRec(true);
-    const recs = await fetchSubstituteRecommendations(shift.schedule_id);
-    setRecommendations(recs);
-    setLoadingRec(false);
+    try {
+      const recs = await fetchSubstituteRecommendations(shift.schedule_id);
+      setRecommendations(recs);
+    } catch (err) {
+      setRecommendations([]);
+      showToast('error', err.message || 'Gagal memuat rekomendasi pengganti.');
+    } finally {
+      setLoadingRec(false);
+    }
   };
 
-  const handleClaimShift = (shiftId) => {
-    setSchedules((prev) =>
-      prev.map((item) =>
-        item.schedule_id === shiftId
-          ? { ...item, status: 'ASSIGNED', nama_karyawan: currentUser.nama_lengkap, user_id: currentUser.user_id }
-          : item
-      )
-    );
-    setToastMsg(`Shift #${shiftId} berhasil diklaim oleh ${currentUser.nama_lengkap} (Row-level lock verified).`);
-    setTimeout(() => setToastMsg(''), 4000);
+  const handleClaimShift = async (shiftId) => {
+    setClaimingId(shiftId);
+    try {
+      const res = await claimOpenShift(shiftId, currentUser.user_id);
+      showToast('success', res.message || `Shift #${shiftId} berhasil diklaim.`);
+      await loadSchedules();
+    } catch (err) {
+      showToast('error', err.message || 'Klaim shift ditolak oleh validasi database Oracle.');
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   const statusBadge = (status) => {
@@ -73,16 +110,30 @@ export default function WeeklySchedule({ currentUser }) {
             className="px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="ALL">Semua Outlet</option>
-            <option value="Darussalam">Kopi Ulee Kareng - Darussalam</option>
-            <option value="Peunayong">Kopi Ulee Kareng - Peunayong</option>
+            {outlets.map((outlet) => (
+              <option key={outlet.outlet_id} value={outlet.nama_outlet}>
+                {outlet.nama_outlet}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {toastMsg && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl flex justify-between items-center">
-          <span>{toastMsg}</span>
-          <button onClick={() => setToastMsg('')} className="text-xs font-bold ml-4 cursor-pointer">✕</button>
+      {toast.message && (
+        <div
+          className={`p-3.5 border text-sm rounded-xl flex justify-between items-center ${
+            toast.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <span>{toast.message}</span>
+          <button
+            onClick={() => setToast({ type: '', message: '' })}
+            className="text-xs font-bold ml-4 cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -103,6 +154,10 @@ export default function WeeklySchedule({ currentUser }) {
               {loading ? (
                 <tr>
                   <td colSpan="6" className="py-8 text-center text-slate-400">Memuat jadwal shift...</td>
+                </tr>
+              ) : schedules.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-slate-400">Tidak ada jadwal shift ditemukan.</td>
                 </tr>
               ) : (
                 schedules.map((item) => (
@@ -127,9 +182,10 @@ export default function WeeklySchedule({ currentUser }) {
                       {item.status === 'OPEN' && (
                         <button
                           onClick={() => handleClaimShift(item.schedule_id)}
-                          className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer"
+                          disabled={claimingId === item.schedule_id}
+                          className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition cursor-pointer"
                         >
-                          Klaim Shift
+                          {claimingId === item.schedule_id ? 'Memproses...' : 'Klaim Shift'}
                         </button>
                       )}
                       {item.status === 'ASSIGNED' && (
@@ -171,6 +227,8 @@ export default function WeeklySchedule({ currentUser }) {
 
           {loadingRec ? (
             <p className="text-xs text-amber-700">Menghitung kelayakan kandidat dari Oracle...</p>
+          ) : recommendations.length === 0 ? (
+            <p className="text-xs text-amber-800">Tidak ada kandidat pengganti yang memenuhi syarat kuota dan jeda istirahat.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {recommendations.map((rec) => (
