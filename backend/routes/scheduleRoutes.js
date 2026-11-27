@@ -60,7 +60,7 @@ router.get('/shifts/weekly', async (req, res) => {
         u.nama_lengkap AS nama_karyawan,
         s.user_id,
         s.status
-      FROM schedules s
+      FROM shift_schedules s
       JOIN outlets o ON s.outlet_id = o.outlet_id
       JOIN shift_templates st ON s.template_id = st.template_id
       LEFT JOIN users u ON s.user_id = u.user_id
@@ -112,11 +112,15 @@ router.get('/shifts/:scheduleId/recommendations', async (req, res) => {
     );
 
     const formatted = result.rows.map((r) => ({
-      user_id: r.USER_ID,
-      nama_lengkap: r.NAMA_LENGKAP,
-      jam_terpakai: r.JAM_TERPAKAI,
-      sisa_kuota_jam: r.SISA_KUOTA_JAM,
-      status_kelayakan: r.STATUS_KELAYAKAN,
+   user_id: r.USER_ID,
+   nama_lengkap: r.NAMA_LENGKAP,
+   jam_terpakai: r.JAM_MINGGU_INI,
+   sisa_kuota_jam: r.SISA_KUOTA_JAM,
+   status_kelayakan:
+     r.SISA_KUOTA_JAM >= 16
+       ? 'SANGAT DIREKOMENDASIKAN (Jeda aman & kuota longgar)'
+       : 'DIREKOMENDASIKAN (Kuota mingguan mencukupi)',
+      
     }));
 
     res.json(formatted);
@@ -146,7 +150,7 @@ router.get('/shifts/history', async (req, res) => {
         h.keterangan,
         TO_CHAR(h.waktu_perubahan, 'YYYY-MM-DD HH24:MI:SS') AS waktu_perubahan
       FROM shift_history h
-      JOIN schedules s ON h.schedule_id = s.schedule_id
+      JOIN shift_schedules s ON h.schedule_id = s.schedule_id
       JOIN shift_templates st ON s.template_id = st.template_id
       LEFT JOIN users ul ON h.user_id_lama = ul.user_id
       LEFT JOIN users ub ON h.user_id_baru = ub.user_id
