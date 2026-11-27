@@ -1,0 +1,311 @@
+{
+  "info": {
+    "name": "ShiftFlow Oracle - QA & Validasi Bisnis",
+    "description": "Koleksi pengujian API Backend ShiftFlow & validasi aturan bisnis Oracle (Row-Level Locking, Compound Trigger Anti-Bentrok & Max 40 Jam, Atomic SP_SWAP_SHIFT, Audit History).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "open_schedule_id", "value": "1085" },
+    { "key": "user_id_1", "value": "2" },
+    { "key": "user_id_2", "value": "3" },
+    { "key": "swap_id_pending", "value": "4" }
+  ],
+  "item": [
+    {
+      "name": "0. Health Check & Master Data",
+      "item": [
+        {
+          "name": "0.1 Health Check Server & Oracle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status HTTP 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Service Status OK', function () { pm.expect(pm.response.json().status).to.eql('OK'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "0.2 Login Karyawan (Mustaqim)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login berhasil (200)', function () { pm.response.to.have.status(200); });",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('user_id_1', json.user_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"karyawan1@shiftflow.id\",\n  \"password\": \"$2b$10$dummyhashuser1123456\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "0.3 Ambil Jadwal Mingguan & Simpan Open Schedule ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Berhasil memuat jadwal (200)', function () { pm.response.to.have.status(200); });",
+                  "var rows = pm.response.json();",
+                  "var openShift = rows.find(r => r.status === 'OPEN' && r.nama_outlet.includes('Darussalam'));",
+                  "if (openShift) { pm.collectionVariables.set('open_schedule_id', openShift.schedule_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/shifts/weekly?outlet=Darussalam"
+          }
+        },
+        {
+          "name": "0.4 Cek Rekap Jam Kerja (V_REKAP_JAM_KERJA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 & struktur view valid', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  var data = pm.response.json();",
+                  "  pm.expect(data).to.be.an('array');",
+                  "  if (data.length > 0) { pm.expect(data[0]).to.have.property('sisa_kuota_jam'); }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/rekap-jam-kerja"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Skenario Klaim Shift & Race Condition (SP_CLAIM_SHIFT)",
+      "item": [
+        {
+          "name": "1.1 [POSITIF] Klaim Shift Kosong Berhasil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Klaim shift berhasil (200)', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response success = true', function () { pm.expect(pm.response.json().success).to.be.true; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": {{open_schedule_id}},\n  \"user_id\": {{user_id_1}}\n}"
+            },
+            "url": "{{baseUrl}}/shifts/claim"
+          }
+        },
+        {
+          "name": "1.2 [NEGATIF - RACE CONDITION] Klaim Shift yang Sudah Terisi (ORA-20010)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Ditolak dengan HTTP 400 (Business Error)', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Pesan error Oracle ORA-20010 sesuai', function () {",
+                  "  pm.expect(pm.response.json().message).to.include('ORA-20010');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": {{open_schedule_id}},\n  \"user_id\": {{user_id_2}}\n}"
+            },
+            "url": "{{baseUrl}}/shifts/claim"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Skenario Trigger Validasi (Bentrok & Batas 40 Jam)",
+      "item": [
+        {
+          "name": "2.1 [NEGATIF] Klaim Shift di Tanggal yang Sudah Ada Jadwal Aktif (ORA-20001)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Ditolak Compound Trigger (HTTP 400)', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Pesan error bentrok jadwal ORA-20001 muncul', function () {",
+                  "  pm.expect(pm.response.json().message).to.include('ORA-20001');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": 0,\n  \"user_id\": {{user_id_1}}\n}"
+            },
+            "url": "{{baseUrl}}/shifts/claim",
+            "description": "Ganti schedule_id dengan ID jadwal OPEN lain pada TANGGAL YANG SAMA dengan jadwal user_id_1 untuk memicu ORA-20001."
+          }
+        },
+        {
+          "name": "2.2 [NEGATIF] Klaim Shift Melebihi Kuota 40 Jam/Minggu (ORA-20002)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Ditolak Compound Trigger (HTTP 400)', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Pesan error batas 40 jam ORA-20002 muncul', function () {",
+                  "  pm.expect(pm.response.json().message).to.include('ORA-20002');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": 0,\n  \"user_id\": {{user_id_1}}\n}"
+            },
+            "url": "{{baseUrl}}/shifts/claim",
+            "description": "Ganti schedule_id dengan jadwal OPEN pada minggu ISO di mana user_id_1 sudah memiliki >= 33-40 jam kerja untuk memicu ORA-20002."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Skenario Tukar Shift Atomik & Audit Log (SP_SWAP_SHIFT)",
+      "item": [
+        {
+          "name": "3.1 Ambil Daftar Pengajuan Swap PENDING",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Berhasil memuat swaps (200)', function () { pm.response.to.have.status(200); });",
+                  "var swaps = pm.response.json();",
+                  "if (swaps.length > 0) { pm.collectionVariables.set('swap_id_pending', swaps[0].swap_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/swaps?status=PENDING"
+          }
+        },
+        {
+          "name": "3.2 [POSITIF] Owner Approve Tukar Shift Atomik (SP_SWAP_SHIFT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Swap disetujui secara atomik (200)', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Success = true', function () { pm.expect(pm.response.json().success).to.be.true; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/swaps/{{swap_id_pending}}/approve"
+          }
+        },
+        {
+          "name": "3.3 [NEGATIF] Approve Ulang Swap yang Sudah Diproses (ORA-20020)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Ditolak karena status bukan PENDING (400)', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Muncul pesan ORA-20020', function () {",
+                  "  pm.expect(pm.response.json().message).to.include('ORA-20020');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/swaps/{{swap_id_pending}}/approve"
+          }
+        },
+        {
+          "name": "3.4 Verifikasi Audit Log Otomatis (SHIFT_HISTORY)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Riwayat audit log tercatat (200)', function () { pm.response.to.have.status(200); });",
+                  "var logs = pm.response.json();",
+                  "pm.test('Terdapat aksi CLAIM_SHIFT atau SWAP_SHIFT dari trigger', function () {",
+                  "  var hasAudit = logs.some(l => l.aksi === 'CLAIM_SHIFT' || l.aksi === 'SWAP_SHIFT');",
+                  "  pm.expect(hasAudit).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/shifts/history"
+          }
+        }
+      ]
+    }
+  ]
+}
