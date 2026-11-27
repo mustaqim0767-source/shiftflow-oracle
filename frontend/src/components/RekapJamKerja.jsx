@@ -12,7 +12,7 @@ export default function RekapJamKerja() {
   }, [bulan]);
 
   return (
-    <div className="rounded bg-white p-5 shadow">
+    <div className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Rekap Jam Kerja</h2>
         <input type="month" value={bulan} onChange={(e) => setBulan(e.target.value)}
