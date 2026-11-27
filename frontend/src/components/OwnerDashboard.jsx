@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { getPending, putuskanSwap } from '../api';
 
-const OWNER_ID = 1; // sesuaikan / ambil dari login
+export default function OwnerDashboard({ currentUser }) {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const ownerId = currentUser.id ?? currentUser.id_karyawan;
+
 
 export default function OwnerDashboard() {
   const [rows, setRows] = useState([]);
@@ -24,9 +30,9 @@ export default function OwnerDashboard() {
   };
 
   return (
-    <div className="rounded bg-white p-5 shadow">
-      <h2 className="mb-3 text-lg font-semibold">Pengajuan Menunggu Persetujuan</h2>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+ <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="mb-3 text-lg font-semibold text-slate-900">Pengajuan Menunggu Persetujuan</h2>
+      {error && <p className="mb-2 text-sm text-rose-600">{error}</p>}
       {loading ? <p>Memuat...</p> : rows.length === 0 ? (
         <p className="text-slate-500">Tidak ada pengajuan.</p>
       ) : (
@@ -36,16 +42,16 @@ export default function OwnerDashboard() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.SWAP_ID} className="border-b">
+              <tr key={r.SWAP_ID} className="border-b border-slate-100">
                 <td className="py-2">#{r.SWAP_ID}</td>
                 <td>{r.PENGAJU_ID}</td>
                 <td>{r.TARGET_ID}</td>
                 <td>{r.ALASAN || '-'}</td>
                 <td className="space-x-2 text-right">
                   <button onClick={() => putuskan(r.SWAP_ID, 'DISETUJUI')}
-                    className="rounded bg-green-600 px-2 py-1 text-white">Setujui</button>
+                    className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 cursor-pointer">Setujui</button>
                   <button onClick={() => putuskan(r.SWAP_ID, 'DITOLAK')}
-                    className="rounded bg-red-600 px-2 py-1 text-white">Tolak</button>
+                    className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-700 cursor-pointer">Tolak</button>
                 </td>
               </tr>
             ))}
