@@ -14,7 +14,7 @@ export default function App() {
     return <LoginPage onLoginSuccess={(userData) => setUser(userData)} />;
   }
 
-   const isOwner = user.role?.toLowerCase() === 'owner';
+  const isOwner = user.role?.toLowerCase() === 'owner';
 
   const tabClass = (tab) =>
     `px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer whitespace-nowrap ${
@@ -22,7 +22,6 @@ export default function App() {
         ? 'bg-amber-50 text-amber-800 font-semibold'
         : 'text-slate-600 hover:bg-slate-100'
     }`;
-  
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800">
@@ -38,38 +37,25 @@ export default function App() {
             </div>
 
             <nav className="flex items-center gap-1 overflow-x-auto">
-              <button
-                onClick={() => setActiveTab('weekly')}
-                className={`px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
-                  activeTab === 'weekly'
-                    ? 'bg-amber-50 text-amber-800 font-semibold'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
+              <button onClick={() => setActiveTab('weekly')} className={tabClass('weekly')}>
                 Jadwal Mingguan
-                </button>
+              </button>
+
               <button onClick={() => setActiveTab('swap')} className={tabClass('swap')}>
                 Ajukan Tukar Shift
               </button>
 
-               {isOwner && (
+              {isOwner && (
                 <button onClick={() => setActiveTab('approval')} className={tabClass('approval')}>
                   Persetujuan
                 </button>
               )}
 
-               <button onClick={() => setActiveTab('rekap')} className={tabClass('rekap')}>
+              <button onClick={() => setActiveTab('rekap')} className={tabClass('rekap')}>
                 Rekap Jam Kerja
               </button>
 
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
-                  activeTab === 'history'
-                    ? 'bg-amber-50 text-amber-800 font-semibold'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
+              <button onClick={() => setActiveTab('history')} className={tabClass('history')}>
                 Riwayat Perubahan
               </button>
             </nav>
@@ -81,7 +67,10 @@ export default function App() {
               <div className="text-xs text-slate-500">{user.role}</div>
             </div>
             <button
-              onClick={() => setUser(null)}
+              onClick={() => {
+                setUser(null);
+                setActiveTab('weekly');
+              }}
               className="px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer"
             >
               Keluar
@@ -93,6 +82,9 @@ export default function App() {
       {/* Konten Utama */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {activeTab === 'weekly' && <WeeklySchedule currentUser={user} />}
+        {activeTab === 'swap' && <SwapForm currentUser={user} />}
+        {activeTab === 'approval' && isOwner && <OwnerDashboard currentUser={user} />}
+        {activeTab === 'rekap' && <RekapJamKerja currentUser={user} />}
         {activeTab === 'history' && <ShiftHistory />}
       </main>
     </div>
