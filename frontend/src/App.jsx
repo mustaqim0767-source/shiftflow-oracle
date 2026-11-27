@@ -2,6 +2,9 @@ import { useState } from 'react';
 import LoginPage from './components/LoginPage';
 import WeeklySchedule from './components/WeeklySchedule';
 import ShiftHistory from './components/ShiftHistory';
+import SwapForm from './components/SwapForm';
+import OwnerDashboard from './components/OwnerDashboard';
+import RekapJamKerja from './components/RekapJamKerja';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -10,6 +13,16 @@ export default function App() {
   if (!user) {
     return <LoginPage onLoginSuccess={(userData) => setUser(userData)} />;
   }
+
+   const isOwner = user.role?.toLowerCase() === 'owner';
+
+  const tabClass = (tab) =>
+    `px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer whitespace-nowrap ${
+      activeTab === tab
+        ? 'bg-amber-50 text-amber-800 font-semibold'
+        : 'text-slate-600 hover:bg-slate-100'
+    }`;
+  
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800">
@@ -24,7 +37,7 @@ export default function App() {
               <span className="font-bold text-lg text-slate-900">TukarJaga</span>
             </div>
 
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-1 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('weekly')}
                 className={`px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
@@ -34,7 +47,21 @@ export default function App() {
                 }`}
               >
                 Jadwal Mingguan
+                </button>
+              <button onClick={() => setActiveTab('swap')} className={tabClass('swap')}>
+                Ajukan Tukar Shift
               </button>
+
+               {isOwner && (
+                <button onClick={() => setActiveTab('approval')} className={tabClass('approval')}>
+                  Persetujuan
+                </button>
+              )}
+
+               <button onClick={() => setActiveTab('rekap')} className={tabClass('rekap')}>
+                Rekap Jam Kerja
+              </button>
+
               <button
                 onClick={() => setActiveTab('history')}
                 className={`px-3.5 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
